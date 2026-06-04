@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Imagen completa (Ctrl+clic)",
+  "version": "1.0",
+  "description": "Ctrl+clic en una imagen para verla a resolucion completa en un visor emergente, en memoria, sin descargarla al disco.",
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
