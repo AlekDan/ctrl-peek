@@ -1,16 +1,16 @@
 # Ctrl-Peek
 
-> View full-resolution images that a website forces you to download — in-memory, without saving anything to disk. Just **Ctrl-click**.
+> View full-resolution images that a website forces you to download. They open in-memory, with nothing saved to disk. Just **Ctrl-click**.
 
 A tiny Chrome / Edge / Brave extension (Manifest V3).
 
 ## The problem
 
-Some sites serve their images with the HTTP header `Content-Disposition: attachment`. That header tells the browser *"don't display this, download it."* So clicking an image — even just to glance at it — drops a file in your Downloads folder instead of opening it.
+Some sites serve their images with the HTTP header `Content-Disposition: attachment`. That header tells the browser *"don't display this, download it."* So clicking an image, even just to glance at it, drops a file in your Downloads folder instead of opening it.
 
 I ran into this on a public asset-auction portal: the thumbnails were small, low-resolution previews, and the only way to see a photo at full resolution was to let it download. Tedious when you're browsing a dozen listings and just want to *look*.
 
-Ctrl-Peek intercepts the click, fetches the image itself, and shows it full-size in an overlay — held in memory, never written to disk.
+Ctrl-Peek intercepts the click, fetches the image itself, and shows it full-size in an overlay that lives in memory and is never written to disk.
 
 ## Demo
 
@@ -24,23 +24,23 @@ Ctrl-Peek intercepts the click, fetches the image itself, and shows it full-size
 2. The full-resolution image opens centered in an overlay. The bottom shows its real pixel dimensions, so you can confirm it's the actual image and not the thumbnail.
 3. Click anywhere or press **Esc** to close. The image is dropped from memory on close.
 
-Normal (non-Ctrl) clicks are left untouched — if you actually want the file downloaded, click as usual.
+Normal (non-Ctrl) clicks are left untouched. If you actually want the file downloaded, click as usual.
 
 ## How it works
 
 The key insight: `Content-Disposition: attachment` only controls what the *browser* does when it navigates to a URL. If you fetch the bytes yourself and render them, the header is irrelevant.
 
-1. On Ctrl-click, the content script cancels the default action (the forced download / new-tab) and resolves the target URL — preferring the `<a href>` that wraps a thumbnail, since that's usually the full-resolution original.
-2. It fetches the image. First it tries a normal `fetch()` from the page (works when the image is same-origin, which is the common case). If that's blocked by CORS, it hands the request to the extension's background service worker, which fetches with `host_permissions` and isn't subject to CORS.
+1. On Ctrl-click, the content script cancels the default action (the forced download or new tab) and resolves the target URL, preferring the `<a href>` that wraps a thumbnail, since that's usually the full-resolution original.
+2. It fetches the image. First it tries a normal `fetch()` from the page, which works when the image is same-origin (the common case). If that's blocked by CORS, it hands the request to the extension's background service worker, which fetches with `host_permissions` and isn't subject to CORS.
 3. The bytes become a `blob:` object URL (or a base64 `data:` URL via the background path) and go straight into an `<img>` inside the overlay.
 
-An `<img>` only ever *decodes* bytes as an image — it never executes them — so a file carrying hidden code can't run through this path. On close, the `blob:` URL is revoked and the `<img>` `src` is cleared, so the bytes become eligible for garbage collection. Opening and closing many images doesn't accumulate memory.
+An `<img>` only ever *decodes* bytes as an image; it never executes them, so a file carrying hidden code can't run through this path. On close, the `blob:` URL is revoked and the `<img>` `src` is cleared, so the bytes become eligible for garbage collection. Opening and closing many images doesn't accumulate memory.
 
 ## Limitations
 
-- It assumes the full-resolution image is reachable from the clicked URL (typically the `<a href>` around the thumbnail). If a site triggers its download through JavaScript rather than a plain link, Ctrl-Peek grabs whatever URL it can find — possibly just the thumbnail. The URL it requests is logged to the console (`F12` → Console) so you can verify.
+- It assumes the full-resolution image is reachable from the clicked URL (typically the `<a href>` around the thumbnail). If a site triggers its download through JavaScript rather than a plain link, Ctrl-Peek grabs whatever URL it can find, which might be just the thumbnail. The URL it requests is logged to the console (`F12`, then Console) so you can verify.
 - It's intentionally small and general. It doesn't special-case every site; it handles the common *"link to an image that downloads"* pattern well.
-- Image-decoder vulnerabilities (rare, e.g. the 2023 libwebp issue) apply to **any** image your browser renders, not just this extension — keep your browser up to date.
+- Image-decoder vulnerabilities (rare, such as the 2023 libwebp issue) apply to **any** image your browser renders, not just this extension, so keep your browser up to date.
 
 ## Install (Chrome / Edge / Brave)
 
