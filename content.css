@@ -3,10 +3,7 @@
   inset: 0;
   z-index: 2147483647;
   display: none;
-  align-items: center;
-  justify-content: center;
   background: rgba(8, 10, 14, 0.82);
-  cursor: zoom-out;
   opacity: 0;
   transition: opacity 0.12s ease;
 }
@@ -15,23 +12,10 @@
   opacity: 1;
 }
 
-#__fullpeek_overlay__ img {
-  max-width: 94vw;
-  max-height: 94vh;
-  border-radius: 8px;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
-  background: #fff;
-}
-
-#__fullpeek_overlay__ .__fp_info {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  font: 12px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.85);
-  background: rgba(0, 0, 0, 0.5);
-  padding: 6px 14px;
-  border-radius: 999px;
+#__fullpeek_overlay__ iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
 }

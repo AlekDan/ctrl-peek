@@ -30,11 +30,13 @@ Normal (non-Ctrl) clicks are left untouched. If you actually want the file downl
 
 The key insight: `Content-Disposition: attachment` only controls what the *browser* does when it navigates to a URL. If you fetch the bytes yourself and render them, the header is irrelevant.
 
-1. On Ctrl-click, the content script cancels the default action (the forced download or new tab) and resolves the target URL, preferring the `<a href>` that wraps a thumbnail, since that's usually the full-resolution original.
-2. It fetches the image. First it tries a normal `fetch()` from the page, which works when the image is same-origin (the common case). If that's blocked by CORS, it hands the request to the extension's background service worker, which fetches with `host_permissions` and isn't subject to CORS.
-3. The bytes become a `blob:` object URL (or a base64 `data:` URL via the background path) and go straight into an `<img>` inside the overlay.
+1. On a real Ctrl-click (synthetic clicks dispatched by the page are ignored), the content script cancels the default action (the forced download or new tab) and resolves the target URL, preferring the `<a href>` that wraps a thumbnail, since that's usually the full-resolution original. Only `http(s)` URLs are accepted.
+2. It opens an overlay containing an iframe with the extension's own `viewer.html`. The viewer fetches the image with `host_permissions`, so CORS doesn't get in the way.
+3. The viewer only accepts `image/*` (or `application/octet-stream`, which many forced-download sites use), caps the size at 100 MB, and puts the bytes into an `<img>` as a `blob:` URL.
 
-An `<img>` only ever *decodes* bytes as an image; it never executes them, so a file carrying hidden code can't run through this path. On close, the `blob:` URL is revoked and the `<img>` `src` is cleared, so the bytes become eligible for garbage collection. Opening and closing many images doesn't accumulate memory.
+**Why an iframe:** the viewer runs on the extension's origin, not the website's. The page can't read what's inside it, so a malicious site can't use Ctrl-Peek to read data from other sites where you're logged in, even if it controls the link you clicked.
+
+An `<img>` only ever *decodes* bytes as an image; it never executes them, so a file carrying hidden code can't run through this path. On close, the iframe is removed, which frees the image and its `blob:` URL. Opening and closing many images doesn't accumulate memory.
 
 ## Limitations
 
@@ -56,14 +58,16 @@ Not on the Web Store; load it unpacked:
 
 ```
 manifest.json   MV3 manifest: permissions and registration
-content.js      intercepts Ctrl-click, resolves the URL, shows the overlay
-background.js   CORS-free fetch fallback, returns the image as a data URL
-content.css     overlay / lightbox styling
+content.js      intercepts Ctrl-click, resolves the URL, opens the overlay
+content.css     overlay styling
+viewer.html     isolated viewer (extension origin) shown inside the overlay
+viewer.js       fetches the image, validates type and size, displays it
+viewer.css      viewer / lightbox styling
 ```
 
 ## Privacy & permissions
 
-The extension requests broad host access because it can run on any site where you Ctrl-click. It does **not** send anything to any external server: a fetch happens only on your explicit Ctrl-click, only to the URL you clicked, and the result only ever lands in a local `<img>` that is discarded when you close the viewer. All the code lives in this repo and is short enough to read end to end.
+The extension requests broad host access because it can run on any site where you Ctrl-click. It does **not** send anything to any external server: a fetch happens only on a real Ctrl-click by you, only to the URL you clicked, and the result only ever lands in an `<img>` inside the isolated viewer, which the website can't read and which is discarded when you close it. All the code lives in this repo and is short enough to read end to end.
 
 ## License
 

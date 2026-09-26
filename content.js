@@ -2,35 +2,49 @@
   "use strict";
 
   const OVERLAY_ID = "__fullpeek_overlay__";
-  let overlay, imgEl, infoEl;
+  const VIEWER_URL = chrome.runtime.getURL("viewer.html");
+  let overlay, frame, hideTimer;
 
   function build() {
     if (overlay) return;
     overlay = document.createElement("div");
     overlay.id = OVERLAY_ID;
-    imgEl = document.createElement("img");
-    infoEl = document.createElement("div");
-    infoEl.className = "__fp_info";
-    overlay.append(imgEl, infoEl);
     document.documentElement.appendChild(overlay);
-    overlay.addEventListener("click", hide);
   }
 
-  function showOverlay() {
+  // La imagen se pide y se pinta dentro de un iframe de la extension (otro
+  // origen), no en el DOM de la pagina: asi la pagina no puede leer los bytes
+  // aunque el enlace clicado lo haya puesto ella.
+  function show(url) {
     build();
-    overlay.style.display = "flex";
+    clearTimeout(hideTimer);
+    frame = document.createElement("iframe");
+    frame.src = VIEWER_URL + "#" + encodeURIComponent(url);
+    frame.addEventListener("load", () => frame && frame.focus()); // para que Esc funcione dentro
+    overlay.replaceChildren(frame);
+    overlay.style.display = "block";
     requestAnimationFrame(() => overlay.classList.add("visible"));
   }
 
   function hide() {
-    if (!overlay) return;
+    if (!overlay || !frame) return;
     overlay.classList.remove("visible");
-    setTimeout(() => {
+    frame = null;
+    hideTimer = setTimeout(() => {
       overlay.style.display = "none";
-      const s = imgEl.getAttribute("src") || "";
-      if (s.startsWith("blob:")) URL.revokeObjectURL(s); // libera memoria
-      imgEl.removeAttribute("src");
+      overlay.replaceChildren(); // quitar el iframe libera la imagen de memoria
     }, 130);
+  }
+
+  // Solo http(s): nada de javascript:, data:, file:, chrome-extension:...
+  function httpUrl(u) {
+    if (typeof u !== "string" || !u) return null;
+    try {
+      const p = new URL(u, location.href);
+      return p.protocol === "http:" || p.protocol === "https:" ? p.href : null;
+    } catch {
+      return null;
+    }
   }
 
   // Decide que URL es la "imagen buena" a partir de lo que se ha clicado.
@@ -38,66 +52,30 @@
   // y si no, el propio src de la imagen.
   function resolveUrl(target) {
     const a = target.closest && target.closest("a");
-    if (a && a.href && !a.href.startsWith("javascript")) return a.href;
-    if (target.tagName === "IMG") return target.currentSrc || target.src;
+    const fromLink = a && httpUrl(a.href);
+    if (fromLink) return fromLink;
+    if (target.tagName === "IMG") return httpUrl(target.currentSrc || target.src);
     return null;
-  }
-
-  // Camino 1: fetch desde la propia pagina (ideal si la imagen es del mismo dominio).
-  async function viaPage(url) {
-    const res = await fetch(url, { credentials: "include" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  }
-
-  // Camino 2 (fallback): que la pida el background, que no sufre CORS.
-  function viaBackground(url) {
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ type: "FETCH_IMAGE", url }, (resp) => {
-        if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
-        if (resp && resp.ok) resolve(resp.dataUrl);
-        else reject(new Error((resp && resp.error) || "fallo en background"));
-      });
-    });
-  }
-
-  async function peek(url) {
-    console.log("[Imagen completa] pidiendo:", url); // diagnostico: mira aqui si algo falla
-    showOverlay();
-    infoEl.textContent = "cargando imagen completa…";
-    imgEl.removeAttribute("src");
-
-    let src;
-    try {
-      src = await viaPage(url);
-    } catch (e1) {
-      try {
-        src = await viaBackground(url);
-      } catch (e2) {
-        infoEl.textContent = "no se pudo cargar: " + (e2.message || e1.message);
-        return;
-      }
-    }
-
-    imgEl.onload = () => {
-      infoEl.textContent = imgEl.naturalWidth + " × " + imgEl.naturalHeight +
-        " px  ·  clic o Esc para cerrar";
-    };
-    imgEl.onerror = () => { infoEl.textContent = "los bytes no son una imagen valida"; };
-    imgEl.src = src;
   }
 
   // Ctrl+clic (o Cmd+clic en Mac). Capturamos antes que la pagina y cancelamos
   // su comportamiento (la descarga / abrir pestana).
   document.addEventListener("click", (e) => {
+    if (!e.isTrusted) return; // ignora clics simulados por la propia pagina
     if (!e.ctrlKey && !e.metaKey) return;
     const url = resolveUrl(e.target);
     if (!url) return;
     e.preventDefault();
     e.stopPropagation();
-    peek(url);
+    console.log("[Imagen completa] pidiendo:", url); // diagnostico: mira aqui si algo falla
+    show(url);
   }, true);
+
+  // El visor pide cerrarse (clic o Esc dentro del iframe). Solo se acepta si
+  // el mensaje viene de nuestro iframe, no de la pagina.
+  window.addEventListener("message", (e) => {
+    if (frame && e.source === frame.contentWindow && e.data === "ctrlpeek:close") hide();
+  });
 
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
 })();
