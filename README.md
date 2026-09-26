@@ -69,6 +69,14 @@ viewer.css      viewer / lightbox styling
 
 The extension requests broad host access because it can run on any site where you Ctrl-click. It does **not** send anything to any external server: a fetch happens only on a real Ctrl-click by you, only to the URL you clicked, and the result only ever lands in an `<img>` inside the isolated viewer, which the website can't read and which is discarded when you close it. All the code lives in this repo and is short enough to read end to end.
 
+## Changelog
+
+### 1.1
+- **Security fix:** a malicious page could fake a Ctrl-click and use the extension to read data from other sites where you're logged in. The viewer now runs in an isolated extension iframe the page can't read, synthetic clicks are ignored, and only image responses up to 100 MB are accepted. **Update if you installed 1.0.**
+
+### 1.0
+- Initial release.
+
 ## License
 
 [MIT](LICENSE)
